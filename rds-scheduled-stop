@@ -1,0 +1,41 @@
+#!/usr/local/bin/python2.7
+# Import the necessary libraries
+import boto3, datetime, sys, os, time
+from time import localtime, strftime
+
+# If its the weekend, then quit
+weekday = datetime.datetime.today().weekday()
+if (weekday == 5) or (weekday == 6):
+sys.exit()
+
+# Launch RDS connection
+region = 'ap-southeast-2'
+print ('- Logging into Amazon AWS "%s" in %s ...' % (os.environ["AWS_PROFILE"],region))
+client = boto3.client('rds', region_name=region)
+
+# Get all RDS instance in the profile
+instances = client.describe_db_instances()
+for instance in instances['DBInstances']:
+  name = instance['DBInstanceIdentifier']
+  status = instance['DBInstanceStatus']
+
+# Get tags for RDS instance
+tags = client.list_tags_for_resource(ResourceName=instance['DBInstanceArn'])
+
+for tag in tags['TagList']:
+  # If schedule_power=yes, then always stop this instance
+  if tag['Key'] == 'schedule_power' and tag['Value'] == 'yes' and status == 'available':
+    print("* Stop RDS DB '%s'" % name)
+    client.stop_db_instance(DBInstanceIdentifier=name)
+  # If schedule_power=morning_start, then start instance at 7:00 AM and stop at 6:00 PM
+  elif tag['Key'] == 'schedule_power' and tag['Value'] == 'morning_start':
+    currentHour = strftime("%H", localtime())
+    # If current hour is 7:00 AM, then start this instance
+    if currentHour == '07' and status != 'available':
+     print("* Starting RDS DB '%s'" % name)
+     client.start_db_instance(DBInstanceIdentifier=name)
+   # If current hour is 6:00 PM, then stop this instance
+   elif currentHour == '18' and status == 'available':
+     print("* Stopping RDS DB '%s'" % name)
+
+# Confiure AWS Profile and schedule the script as: AWS_PROFILE=profile1 /usr/local/bin/aws_backup_rds.py
