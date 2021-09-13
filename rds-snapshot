@@ -1,0 +1,23 @@
+#!/usr/bin/python3
+''' If a RDS instance has tag key 'backup' and value 'yes', then take a snapshot of that RDS instance
+import os
+import boto3
+import urllib3
+import time,  datetime
+from datetime import timedelta
+
+# SNIMissingWarning: An HTTPS request has been made, but the SNI (Server Name Indication) extension to TLS is not available on this platform.
+urllib3.disable_warnings()
+
+conn = boto3.client('rds', region_name='ap-southeast-2')
+rds_instances = conn.describe_db_instances()
+for instance in rds_instances['DBInstances']:
+ tag_list = conn.list_tags_for_resource(ResourceName=instance['DBInstanceArn'])
+ for tag in tag_list['TagList']:
+  if tag['Key'] == 'backup' and tag['value'] == 'yes':
+   instance_name = instance['DBInstanceIdentifier']
+   snapshot_name = instance_name + "-" + time.strftime("%Y%m%dT%H%M%S")
+   conn.create_db_snapshot(DBSnapshotIdentifier=snapshot_name, DBInstanceIdentifier=instance_name)
+   print "Back up RDS instance " + "\'" + instance_name + "\'" + " with backup name: (" + snapshot_name + ")"
+
+# Configure AWS profile and run the script as: sudo su - user1 -c "AWS_PROFILE=profile1 /usr/local/bin/aws_backup_rds.py"
